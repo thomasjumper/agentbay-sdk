@@ -353,6 +353,225 @@ export class AgentBay {
   }
 
   // ------------------------------------------------------------------
+  // Chat — Auto-memory LLM wrapper
+  // ------------------------------------------------------------------
+
+  /**
+   * Send messages to an LLM with automatic memory recall and storage.
+   * Requires `@anthropic-ai/sdk` or `openai` to be installed separately.
+   *
+   * @example
+   * const response = await brain.chat([
+   *   { role: 'user', content: 'How should I handle DB connections?' }
+   * ]);
+   */
+  async chat(
+    messages: Array<{ role: string; content: string }>,
+    opts?: {
+      model?: string;
+      provider?: 'anthropic' | 'openai';
+      autoRecall?: boolean;
+      autoStore?: boolean;
+      recallLimit?: number;
+      [key: string]: any;
+    },
+  ): Promise<any> {
+    const provider = opts?.provider ?? 'anthropic';
+    const model = opts?.model ?? (provider === 'anthropic' ? 'claude-sonnet-4-20250514' : 'gpt-4o');
+    const autoRecall = opts?.autoRecall ?? true;
+    const autoStore = opts?.autoStore ?? true;
+    const recallLimit = opts?.recallLimit ?? 3;
+
+    // Extract pass-through options (everything except our known keys)
+    const knownKeys = new Set(['model', 'provider', 'autoRecall', 'autoStore', 'recallLimit']);
+    const passThrough: Record<string, any> = {};
+    if (opts) {
+      for (const [k, v] of Object.entries(opts)) {
+        if (!knownKeys.has(k)) passThrough[k] = v;
+      }
+    }
+
+    // 1. Auto-recall: find relevant memories for the last user message
+    let contextPrefix = '';
+    if (autoRecall) {
+      const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
+      if (lastUserMsg) {
+        try {
+          const recalled = await this.recall(lastUserMsg.content, { limit: recallLimit });
+          if (recalled.entries && recalled.entries.length > 0) {
+            const memoryLines = recalled.entries.map(
+              e => `- [${e.type}] ${e.title}: ${e.content}`,
+            );
+            contextPrefix =
+              'Relevant memories from your Knowledge Brain:\n' +
+              memoryLines.join('\n') +
+              '\n\n';
+          }
+        } catch {
+          // Recall failure is non-fatal
+        }
+      }
+    }
+
+    // 2. Call LLM
+    let response: any;
+
+    if (provider === 'anthropic') {
+      let Anthropic: any;
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-implied-eval
+        const modName = '@anthropic-ai/sdk';
+        const mod = await (Function('m', 'return import(m)')(modName) as Promise<any>);
+        Anthropic = mod.default || mod.Anthropic || mod;
+      } catch {
+        throw new AgentBayError(
+          'Anthropic SDK not found. Install it: npm install @anthropic-ai/sdk',
+          0,
+          'MISSING_DEPENDENCY',
+        );
+      }
+
+      const client = new Anthropic();
+
+      // Separate system messages from the rest
+      const systemMsgs = messages.filter(m => m.role === 'system');
+      const nonSystemMsgs = messages.filter(m => m.role !== 'system');
+
+      let systemText = systemMsgs.map(m => m.content).join('\n\n');
+      if (contextPrefix) {
+        systemText = contextPrefix + (systemText ? '\n\n' + systemText : '');
+      }
+
+      response = await client.messages.create({
+        model,
+        max_tokens: passThrough.max_tokens ?? 4096,
+        ...(systemText ? { system: systemText } : {}),
+        messages: nonSystemMsgs.map((m: { role: string; content: string }) => ({
+          role: m.role as 'user' | 'assistant',
+          content: m.content,
+        })),
+        ...passThrough,
+      });
+    } else {
+      // OpenAI
+      let OpenAI: any;
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-implied-eval
+        const modName = 'openai';
+        const mod = await (Function('m', 'return import(m)')(modName) as Promise<any>);
+        OpenAI = mod.default || mod.OpenAI || mod;
+      } catch {
+        throw new AgentBayError(
+          'OpenAI SDK not found. Install it: npm install openai',
+          0,
+          'MISSING_DEPENDENCY',
+        );
+      }
+
+      const client = new OpenAI();
+
+      // Prepend context as a system message
+      const augmentedMessages = contextPrefix
+        ? [{ role: 'system', content: contextPrefix }, ...messages]
+        : [...messages];
+
+      response = await client.chat.completions.create({
+        model,
+        messages: augmentedMessages,
+        ...passThrough,
+      });
+    }
+
+    // 3. Auto-store: check for learnable content in the response
+    if (autoStore) {
+      try {
+        let responseText = '';
+        if (provider === 'anthropic') {
+          responseText = response?.content
+            ?.filter((b: any) => b.type === 'text')
+            .map((b: any) => b.text)
+            .join('') ?? '';
+        } else {
+          responseText = response?.choices?.[0]?.message?.content ?? '';
+        }
+
+        const learnableKeywords = /\b(fix|bug|decided|pattern|issue was|the problem|pitfall|mistake|always|never)\b/i;
+        if (responseText && learnableKeywords.test(responseText)) {
+          const snippet = responseText.slice(0, 500);
+          // Fire and forget — don't block the response
+          this.store(snippet, {
+            title: snippet.slice(0, 80),
+            type: 'PATTERN',
+          }).catch(() => {});
+        }
+      } catch {
+        // Auto-store failure is non-fatal
+      }
+    }
+
+    return response;
+  }
+
+  // ------------------------------------------------------------------
+  // Mem0-compatible aliases
+  // ------------------------------------------------------------------
+
+  /**
+   * Store a memory entry with auto-detected title and type.
+   * Compatible with Mem0's `add()` API.
+   *
+   * @param data - The content to store.
+   * @param opts - Optional userId and metadata.
+   * @returns The created entry with its `id`.
+   *
+   * @example
+   * await brain.add('The bug was caused by a missing null check');
+   */
+  async add(
+    data: string,
+    opts?: { userId?: string; metadata?: Record<string, any> },
+  ): Promise<{ id: string }> {
+    // Auto-detect title: first sentence or first 80 chars
+    const firstSentenceMatch = data.match(/^[^.!?\n]+[.!?]?/);
+    const title = firstSentenceMatch
+      ? firstSentenceMatch[0].slice(0, 80)
+      : data.slice(0, 80);
+
+    // Auto-detect type
+    let type: 'PITFALL' | 'DECISION' | 'PATTERN' = 'PATTERN';
+    const lower = data.toLowerCase();
+    if (/\b(bug|error|fix|crash|broke|broken|issue|problem)\b/.test(lower)) {
+      type = 'PITFALL';
+    } else if (/\b(decided|chose|chosen|decision|went with|picked)\b/.test(lower)) {
+      type = 'DECISION';
+    }
+
+    const storeOpts: Partial<StoreOptions> = {
+      title,
+      type,
+      tags: opts?.metadata?.tags,
+    };
+
+    const result = await this.store(data, storeOpts);
+    return { id: result.id };
+  }
+
+  /**
+   * Search memories by semantic query.
+   * Compatible with Mem0's `search()` API.
+   *
+   * @param query - Natural-language search query.
+   * @param opts - Optional limit.
+   * @returns Matching entries with scores.
+   *
+   * @example
+   * const results = await brain.search('database patterns');
+   */
+  async search(query: string, opts?: { limit?: number }): Promise<RecallResult> {
+    return this.recall(query, { limit: opts?.limit });
+  }
+
+  // ------------------------------------------------------------------
   // Utility
   // ------------------------------------------------------------------
 

@@ -15,6 +15,23 @@ npm install @agentbay/sdk
 ```typescript
 import { AgentBay } from '@agentbay/sdk';
 
+const brain = new AgentBay({
+  apiKey: 'ab_live_your_key',
+  projectId: 'your-project-id',
+});
+
+// Chat with automatic memory — recalls relevant knowledge before the LLM call,
+// stores learnable insights from the response automatically.
+const response = await brain.chat([
+  { role: 'user', content: 'How should I handle database connections?' }
+]);
+// Requires @anthropic-ai/sdk (default) or openai installed separately:
+//   npm install @anthropic-ai/sdk
+```
+
+### Without chat — manual store & recall
+
+```typescript
 const brain = new AgentBay('ab_live_your_key');
 
 // Create a brain (project) for your agent
@@ -44,6 +61,51 @@ const results = await brain.recall('deployment steps');
 ```
 
 ## API Reference
+
+### Chat (Auto-Memory LLM Wrapper)
+
+```typescript
+// Default: Anthropic Claude with auto-recall + auto-store
+const response = await brain.chat([
+  { role: 'user', content: 'How do I optimize this query?' }
+]);
+
+// OpenAI provider
+const response = await brain.chat(
+  [{ role: 'user', content: 'Explain connection pooling' }],
+  { provider: 'openai', model: 'gpt-4o' }
+);
+
+// Disable auto-memory features
+const response = await brain.chat(messages, {
+  autoRecall: false,  // skip memory lookup
+  autoStore: false,   // skip storing insights
+});
+
+// Pass-through options go directly to the LLM provider
+const response = await brain.chat(messages, {
+  max_tokens: 8192,
+  temperature: 0.7,
+});
+```
+
+Requires one of these installed separately (not bundled):
+- `npm install @anthropic-ai/sdk` (for Anthropic/Claude)
+- `npm install openai` (for OpenAI)
+
+### Mem0-Compatible Aliases
+
+```typescript
+// add() — auto-detects title and type (PITFALL, DECISION, or PATTERN)
+await brain.add('The bug was caused by a missing null check in the auth middleware');
+// => stored as type: PITFALL (detected "bug")
+
+await brain.add('We decided to use PostgreSQL over MongoDB for ACID compliance');
+// => stored as type: DECISION (detected "decided")
+
+// search() — alias for recall()
+const results = await brain.search('database patterns', { limit: 5 });
+```
 
 ### Memory
 
