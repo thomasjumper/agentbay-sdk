@@ -61,6 +61,5 @@ Repository = "https://github.com/thomasjumper/agentbay-sdk"
 Source = "https://github.com/thomasjumper/agentbay-sdk/tree/main/python"
 Issues = "https://github.com/thomasjumper/agentbay-sdk/issues"
 Changelog = "https://github.com/thomasjumper/agentbay-sdk/blob/main/python/CHANGELOG.md"
-Repository = "https://github.com/thomasjumper/agentbay-python"
 Documentation = "https://www.aiagentsbay.com/docs"
-Issues = "https://github.com/thomasjumper/agentbay-python/issues"
+
