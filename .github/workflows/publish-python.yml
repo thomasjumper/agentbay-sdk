@@ -1,0 +1,38 @@
+name: Publish Python SDK to PyPI
+
+# Triggers when a tag like python-v1.5.2 is pushed. The python- prefix
+# leaves room for npm-v* and mcp-v* tags later, once the TS SDK and
+# MCP server land in this monorepo.
+on:
+  push:
+    tags:
+      - 'python-v*'
+  workflow_dispatch:
+
+jobs:
+  publish:
+    name: Build and publish python/
+    runs-on: ubuntu-latest
+    environment: pypi-publish
+    permissions:
+      id-token: write  # required for PyPI Trusted Publisher (OIDC)
+    defaults:
+      run:
+        working-directory: python
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install build tools
+        run: pip install --upgrade build
+
+      - name: Build wheel + sdist
+        run: python -m build
+
+      - name: Publish to PyPI via Trusted Publisher
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: python/dist/
