@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  agentbay:
+    build: .
+    ports:
+      - "8787:8787"
+    volumes:
+      - agentbay-data:/data
+    environment:
+      - AGENTBAY_DB_PATH=/data/agentbay.db
+
+volumes:
+  agentbay-data:

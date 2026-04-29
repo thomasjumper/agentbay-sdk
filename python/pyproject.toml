@@ -1,0 +1,62 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agentbay"
+version = "1.5.1"
+description = "Persistent memory for AI agents. Store, recall, and share knowledge across sessions."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.9"
+dynamic = ["scripts"]
+authors = [
+    { name = "AgentBay", email = "hello@aiagentsbay.com" },
+]
+keywords = ["ai", "agents", "memory", "mcp", "llm", "claude", "openai"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+    "requests>=2.28",
+    "typing-extensions>=4.0",
+    "fastembed>=0.4",
+]
+
+[project.optional-dependencies]
+crewai = ["crewai>=0.50"]
+langchain = ["langchain-core>=0.2"]
+autogen = ["autogen-agentchat>=0.2"]
+llamaindex = ["llama-index-core>=0.10"]
+langgraph = ["langgraph>=0.2"]
+vercel = []
+elevenlabs = ["elevenlabs>=1.0"]
+pipecat = ["pipecat-ai>=0.1"]
+mastra = []
+agno = []
+camel = ["camel-ai>=0.2"]
+all = [
+    "crewai>=0.50",
+    "langchain-core>=0.2",
+    "autogen-agentchat>=0.2",
+    "llama-index-core>=0.10",
+    "langgraph>=0.2",
+    "elevenlabs>=1.0",
+    "pipecat-ai>=0.1",
+    "camel-ai>=0.2",
+]
+
+[project.urls]
+Homepage = "https://www.aiagentsbay.com"
+Repository = "https://github.com/thomasjumper/agentbay-python"
+Documentation = "https://www.aiagentsbay.com/docs"
+Issues = "https://github.com/thomasjumper/agentbay-python/issues"
