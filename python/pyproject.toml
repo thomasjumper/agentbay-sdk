@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agentbay"
-version = "1.5.1"
+version = "1.5.2"
 description = "Persistent memory for AI agents. Store, recall, and share knowledge across sessions."
 readme = "README.md"
 license = "MIT"
